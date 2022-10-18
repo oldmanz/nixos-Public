@@ -1,0 +1,147 @@
+* How to do a few things
+
+** Installing
+*** Boot to tty
+*** Login as Root
+#+BEGIN_SRC bash
+sudo -i
+#+END_SRC
+*** Set Root password
+#+BEGIN_SRC bash
+passwd
+#+END_SRC
+*** Connect to network
+#+BEGIN_SRC bash
+sudo systemctl start wpa_supplicant
+wpa_cli
+add_network
+set_network 0 ssid "myhomenetwork"
+set_network 0 psk "mypassword"
+set_network 0 key_mgmt WPA-PSK
+enable_network 0
+quit
+#+END_SRC
+*** Login with ssh.
+On Host
+#+BEGIN_SRC bash
+ip a ## To get address
+#+END_SRC
+On Client
+#+BEGIN_SRC bash
+ssh nixos@ip
+sudo -i  ## to stay root
+#+END_SRC
+*** Setup Drives
+**** Partition Disk
+#+BEGIN_SRC bash
+cfdisk /dev/nvme0n1  ## or other disk
+#+END_SRC
+550MB > EFI
+32GB > Swap (or whatever size)
+Rest > Filesystem
+**** Format and Label Partitions
+#+BEGIN_SRC bash
+mkfs.fat -F 32 -n boot /dev/nvme0n1p1
+mkswap -L swap /dev/nvme0n1p2
+mkfs.ext4 -L root /dev/nvme0n1p3
+#+END_SRC
+**** Setup ZFS
+***** Create Main Pool
+#+BEGIN_SRC bash
+zpool create -O mountpoint=none -O encryption=on -O keyformat=passphrase -O keylocation=prompt -R /mnt rpool /dev/nvme0n1p3
+#+END_SRC
+***** Create Datasets
+#+BEGIN_SRC bash
+  zfs create -p -o mountpoint=legacy rpool/local/root  # Root
+  zfs create -p -o mountpoint=legacy rpool/local/nix # Nix files
+  zfs create -p -o mountpoint=legacy rpool/safe/home # Home Files
+  zfs create -p -o mountpoint=legacy rpool/safe/persist # Persist Between Restarts
+  zfs create -o refreservation=100G -o mountpoint=none rpool/reserved  # Restricted Space to not use. Speeds slow at 80% of Drive
+#+END_SRC
+***** Take Blank Snapshot of Root and Hold it (don't allow deletes)
+#+BEGIN_SRC bash
+zfs snapshot rpool/local/root@blank
+zfs hold keep rpool/local/root@blank
+#+END_SRC
+***** Enable Auto Snapshots for pool
+#+BEGIN_SRC bash
+sudo zfs set com.sun:auto-snapshot=false rpool ## Turn off Snapshots for drive
+sudo zfs set com.sun:auto-snapshot=true rpool/safe/home ## Turn on for home volume
+#+END_SRC
+**** Mount Drives
+#+BEGIN_SRC bash
+mount -t zfs rpool/local/root /mnt
+
+mkdir /mnt/boot
+mount /dev/disk/by-label/boot /mnt/boot
+
+mkdir /mnt/nix
+mount -t zfs rpool/local/nix /mnt/nix
+
+mkdir /mnt/home
+mount -t zfs rpool/safe/home /mnt/home
+
+mkdir /mnt/persist
+mount -t zfs rpool/safe/persist /mnt/persist
+#+END_SRC
+ 
+*** Transfer Config Using SCP
+#+BEGIN_SRC bash
+scp -r .\Downloads\nixos\repo\root\* root@192.168.1.12:/mnt/etc/nixos  ## (from ssh host)
+#+END_SRC
+
+*** Set up Persist Folders
+This may need to be done.  Will write instructions the next time.
+Basically, persist may need to have the empty folder structure so that the etc manager in configuration.nix can simlink it.
+
+*** Install Nix System
+#+BEGIN_SRC bash
+nixos-install --flake /mnt/etc/nixos/flake.nix#Znform  ## May need the --impure flag
+#+END_SRC
+*** Reboot
+#+BEGIN_SRC bash
+reboot
+#+END_SRC
+
+** Post Install
+*** First Boot
+**** Connect to wifi
+#+BEGIN_SRC bash
+sudo nmtui
+#+END_SRC
+
+**** Setup vimplug, etc:
+#+BEGIN_SRC bash
+setup
+#+END_SRC
+
+**** Setup 2n docker stuff:
+#+BEGIN_SRC bash
+n
+#+END_SRC
+
+**** Import GPG Keys:
+#+BEGIN_SRC bash
+gpg —-import ~/.config/guix/src/oldmanz-gpg-backup.asc
+gpg --edit-key oldmanz
+trust ## choose ultimate
+save
+#+END_SRC
+
+**** Copy GTK Themes:
+#+BEGIN_SRC bash
+cp -R ~/.config/guix/src/gtk/themes ~/.themes
+#+END_SRC
+
+** Fixing Issues
+*** Chroot
+Boot up with Recovery Flash Drive (nixos minimal)
+#+BEGIN_SRC bash
+zpool import -f -l rpool  # Import pool, and decrypt.
+#+END_SRC
+
+Mount the drives / pools with the mounting instructions above
+
+#+BEGIN_SRC bash
+nixos-enter
+#+END_SRC

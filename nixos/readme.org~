@@ -1,0 +1,56 @@
+### How to do a few things
+
+## Installing
+- Boot to tty
+- sudo -i
+- `passwd`  (set root passwd)
+- Connect to wifi
+  - `sudo systemctl start wpa_supplicant`
+  - `wpa_cli`
+  - `add_network`
+  - `set_network 0 ssid "myhomenetwork"`
+  - `set_network 0 psk "mypassword"`
+  - `set_network 0 key_mgmt WPA-PSK`
+  - `enable_network 0`
+  - `quit`
+- Login with ssh  computer.
+  - `ssh nixos@ip`   - `ip a` for ip
+- `sudo -i`  -to stay root
+- `cfdisk /dev/<device>` - Setup normal 3 partitions
+  - 550MB EFI
+  - 32GB Swap (or whatever size)
+  - Rest Filesystem
+- format and label partitions
+  - `mkfs.fat -F 32 -n boot /dev/<device partition 1>`
+  - `mkswap -L swap /dev/<device partition 2>`
+  - `mkfs.ext4 -L root /dev/<device partition 3>`
+- Mount drives
+  - `mount /dev/disk/by-label/root /mnt`
+  - `mkdir -p /mnt/boot`
+  - `mount /dev/disk/by-label/boot /mnt/boot`
+  - `swapon /dev/disk/by-label/swap`
+- Transfer Config Using SCP
+  - `scp -r .\Downloads\nixos\repo\root\* root@192.168.1.12:/mnt/etc/nixos` (from ssh host) (best to copy to nixos sub dir so not to dirty up etc)
+  - `nixos-install --flake /mnt/etc/nixos/flake.nix#Znform --impure`
+- Reboot
+  - `reboot`
+
+## Post Install
+# First Boot
+- Switch To tty and set user passwd
+- Connect to wifi with `sudo nmtui`
+
+# Setup nix applications, vimplug, etc:`
+- `setup`
+
+# Setup 2n docker stuff:
+- `n`
+
+# Import GPG Keys:
+- `gpg —-import ~/.config/guix/src/oldmanz-gpg-backup.asc`
+- `gpg --edit-key oldmanz`
+- `trust`  choose ultimate
+- `save`
+
+# Copy GTK Themes:
+- `cp -R ~/.config/guix/src/gtk/themes ~/.themes`
